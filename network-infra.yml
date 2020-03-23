@@ -54,27 +54,6 @@ Resources:
             InternetGatewayId: !Ref InternetGateway #references the internetgateway that I want to attach
             VpcId: !Ref VPC
 
-    PublicSubnet1: 
-        Type: AWS::EC2::Subnet
-        Properties:
-            VpcId: !Ref VPC
-            AvailabilityZone: !Select [ 0, !GetAZs '' ] #Select function to select Availability Zone number 0
-            CidrBlock: !Ref PublicSubnet1CIDR
-            MapPublicIpOnLaunch: true #it decides whether a server deployed to this subnet will get a public ip automatically when launched or not
-            Tags: 
-                - Key: Name 
-                  Value: !Sub ${EnvironmentName} Public Subnet (AZ1)
-
-    PublicSubnet2: 
-        Type: AWS::EC2::Subnet
-        Properties:
-            VpcId: !Ref VPC
-            AvailabilityZone: !Select [ 1, !GetAZs '' ]
-            CidrBlock: !Ref PublicSubnet2CIDR
-            MapPublicIpOnLaunch: true
-            Tags: 
-                - Key: Name 
-                  Value: !Sub ${EnvironmentName} Public Subnet (AZ2)
 
     PrivateSubnet1: 
         Type: AWS::EC2::Subnet
@@ -98,6 +77,28 @@ Resources:
                 - Key: Name 
                   Value: !Sub ${EnvironmentName} Private Subnet (AZ2)
 
+    PublicSubnet1: 
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            AvailabilityZone: !Select [ 0, !GetAZs '' ] #Select function to select Availability Zone number 0
+            CidrBlock: !Ref PublicSubnet1CIDR
+            MapPublicIpOnLaunch: true #it decides whether a server deployed to this subnet will get a public ip automatically when launched or not
+            Tags: 
+                - Key: Name 
+                  Value: !Sub ${EnvironmentName} Public Subnet (AZ1)
+
+    PublicSubnet2: 
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            AvailabilityZone: !Select [ 1, !GetAZs '' ]
+            CidrBlock: !Ref PublicSubnet2CIDR
+            MapPublicIpOnLaunch: true
+            Tags: 
+                - Key: Name 
+                  Value: !Sub ${EnvironmentName} Public Subnet (AZ2)
+
     NatGateway1EIP:
         Type: AWS::EC2::EIP #Elastic IP for the NAT gateway, like a router's public ip..
         DependsOn: InternetGatewayAttachment
@@ -120,6 +121,36 @@ Resources:
         Type: AWS::EC2::NatGateway
         Properties:
             AllocationId: !GetAtt NatGateway2EIP.AllocationId
+            SubnetId: !Ref PublicSubnet2
+
+    PublicRouteTable: #the route table itself, it needs rules to be added
+        Type: AWS::EC2::RouteTable
+        Properties: 
+            VpcId: !Ref VPC
+            Tags: 
+                - Key: Name 
+                  Value: !Sub ${EnvironmentName} Public Routes
+
+    DefaultPublicRoute: #the routing rule. it says anything that goes to 0.0.0.0/0 which is a wildcard for everything, 
+                        #should go to the internet gateway, this is very non specific so any more specific route will override it.
+                        #This Route is for Public Subnets.
+        Type: AWS::EC2::Route
+        DependsOn: InternetGatewayAttachment
+        Properties: 
+            RouteTableId: !Ref PublicRouteTable #The Route Table specified
+            DestinationCidrBlock: 0.0.0.0/0
+            GatewayId: !Ref InternetGateway
+
+    PublicSubnet1RouteTableAssociation: #Association to tell what subnet to apply this Route Table onto
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            RouteTableId: !Ref PublicRouteTable
+            SubnetId: !Ref PublicSubnet1
+
+    PublicSubnet2RouteTableAssociation:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            RouteTableId: !Ref PublicRouteTable
             SubnetId: !Ref PublicSubnet2
 
     PrivateRouteTable1:
@@ -150,35 +181,7 @@ Resources:
             Tags: 
                 - Key: Name 
                   Value: !Sub ${EnvironmentName} Private Routes (AZ2)
-    PublicRouteTable: #the route table itself, it needs rules to be added
-        Type: AWS::EC2::RouteTable
-        Properties: 
-            VpcId: !Ref VPC
-            Tags: 
-                - Key: Name 
-                  Value: !Sub ${EnvironmentName} Public Routes
 
-    DefaultPublicRoute: #the routing rule. it says anything that goes to 0.0.0.0/0 which is a wildcard for everything, 
-                        #should go to the internet gateway, this is very non specific so any more specific route will override it.
-                        #This Route is for Public Subnets.
-        Type: AWS::EC2::Route
-        DependsOn: InternetGatewayAttachment
-        Properties: 
-            RouteTableId: !Ref PublicRouteTable #The Route Table specified
-            DestinationCidrBlock: 0.0.0.0/0
-            GatewayId: !Ref InternetGateway
-
-    PublicSubnet1RouteTableAssociation: #Association to tell what subnet to apply this Route Table onto
-        Type: AWS::EC2::SubnetRouteTableAssociation
-        Properties:
-            RouteTableId: !Ref PublicRouteTable
-            SubnetId: !Ref PublicSubnet1
-
-    PublicSubnet2RouteTableAssociation:
-        Type: AWS::EC2::SubnetRouteTableAssociation
-        Properties:
-            RouteTableId: !Ref PublicRouteTable
-            SubnetId: !Ref PublicSubnet2
     
     DefaultPrivateRoute2:
         Type: AWS::EC2::Route
